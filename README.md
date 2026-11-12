@@ -78,10 +78,12 @@ Cada dispositivo Tuya cifra su tráfico con una **clave local** de 16 caracteres
 1. Crea una cuenta gratuita en [platform.tuya.com](https://platform.tuya.com) (iot.tuya.com).
 2. **Cloud → Development → Create Cloud Project.** Elige el centro de datos de tu cuenta de Smart Life (para México: *Western America*).
 3. En el proyecto: **Devices → Link App Account → Add App Account** y escanea el código QR desde Smart Life (*Yo → icono de escanear*).
-4. Copia el **Access ID** y el **Access Secret** de la pestaña *Overview*.
+4. Cierra el panel *Manage Devices* y, en la pestaña **Overview**, sección **Authorization Key**, copia el **Access ID** y el **Access Secret** (este último está oculto: pulsa el ojo o el icono de copiar).
 5. En Hogar Local: **+ → Descargar de Tuya IoT**, elige el mismo centro de datos y pega las credenciales.
 
-Se bajan nombres, claves y funciones de todos tus dispositivos. Guía detallada: [docs/CLAVES.md](docs/CLAVES.md).
+Se bajan nombres, claves y funciones de todos tus dispositivos.
+
+📘 **Guía paso a paso, con tabla de centros de datos y solución de errores: [docs/CLAVES.md](docs/CLAVES.md).**
 
 ### B) Importar un archivo
 
