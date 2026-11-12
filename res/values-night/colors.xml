@@ -1,0 +1,9 @@
+<resources>
+    <color name="bg">#0F1013</color>
+    <color name="card">#1B1C21</color>
+    <color name="text">#F1F2F4</color>
+    <color name="text2">#9A9DA6</color>
+    <color name="chip">#2A2C33</color>
+    <color name="line">#2C2E35</color>
+    <color name="danger">#F2675C</color>
+</resources>

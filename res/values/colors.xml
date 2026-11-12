@@ -1,0 +1,11 @@
+<resources>
+    <color name="accent">#FF5A1F</color>
+    <color name="on_accent">#FFFFFF</color>
+    <color name="bg">#F4F5F9</color>
+    <color name="card">#FFFFFF</color>
+    <color name="text">#1B1C1F</color>
+    <color name="text2">#8A8D96</color>
+    <color name="chip">#EEF0F4</color>
+    <color name="line">#E3E5EB</color>
+    <color name="danger">#D93025</color>
+</resources>

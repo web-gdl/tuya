@@ -1,0 +1,8 @@
+build/
+out/
+tools/android.jar
+tools/aapt2
+tools/aapt2_64
+tools/jadx-all.jar
+keystore/
+docs/screenshots/*.tmp.png
