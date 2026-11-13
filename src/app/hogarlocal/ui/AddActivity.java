@@ -25,6 +25,7 @@ import java.util.Map;
 
 import app.hogarlocal.Home;
 import app.hogarlocal.R;
+import app.hogarlocal.Scheduler;
 import app.hogarlocal.model.Device;
 import app.hogarlocal.model.DpLogic;
 import app.hogarlocal.model.Importer;
@@ -201,6 +202,7 @@ public final class AddActivity extends Activity implements Home.Observer {
         if (r.homeName != null && home.store.devices.isEmpty()) home.store.homeName = r.homeName;
         int[] n = Importer.merge(home.store, r);
         home.save();
+        Scheduler.update(this);
         home.sync();
         foundSignature = "";
         refresh();

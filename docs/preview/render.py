@@ -165,8 +165,9 @@ def rows(c, items):
     return '<div class="gc">' + ('<div class="dv"></div>'.join(row(c, *i) for i in items)) + "</div>"
 
 
-def info(c, room, link, dev_id):
-    return rows(c, [("Cuarto", room), ("Conexión", link), ("Identificador", dev_id, False)])
+def info(c, room, link, dev_id, sched=None):
+    items = [("Programación", sched)] if sched else []
+    return rows(c, items + [("Cuarto", room), ("Conexión", link), ("Identificador", dev_id, False)])
 
 
 def detail_plug(c):
@@ -175,7 +176,8 @@ def detail_plug(c):
     met = ('<div class="gc"><div class="met"><div><b>23.5 W</b><span>Potencia</span></div><div><b>127.1 V</b><span>Voltaje</span></div>'
            '<div><b>185 mA</b><span>Corriente</span></div></div></div>')
     body = '<div class="body">%s%s<div style="height:16px"></div>%s</div>' % (
-        hero, met, info(c, "Cocina", "192.168.1.42 · protocolo 3.4", "eb1a2b3c4d5e6f7g8h9ijk"))
+        hero, met, info(c, "Cocina", "192.168.1.42 · protocolo 3.4", "eb1a2b3c4d5e6f7g8h9ijk",
+                 "1 activo · se apaga hoy 9:00 p. m."))
     return frame(c, bar(c, "Cafetera", "En línea · red local") + body)
 
 
@@ -189,7 +191,8 @@ def detail_switch(c):
     sw = '<div class="gc">%s<div class="dv"></div>%s<div class="dv"></div>%s</div>' % (
         srow("Techo", True), srow("Lámpara", True, "Se apaga en 1 h"), srow("Ventilador", False))
     body = '<div class="body">%s%s<div style="height:16px"></div>%s</div>' % (
-        allb, sw, info(c, "Sala", "192.168.1.37 · protocolo 3.3", "bf9z8y7x6w5v4u3t2s1rqp"))
+        allb, sw, info(c, "Sala", "192.168.1.37 · protocolo 3.3", "bf9z8y7x6w5v4u3t2s1rqp",
+                 "2 activos · se enciende hoy 7:00 p. m."))
     return frame(c, bar(c, "Luz de la sala", "En línea · red local") + body)
 
 
@@ -204,6 +207,70 @@ def add(c):
             'Aquí aparecen los que están en tu misma red Wi-Fi.</div>')
     body = '<div class="body"><div class="sec">Claves locales</div>%s<div class="sec">En tu red</div>%s%s</div>' % (keys, hint, found)
     return frame(c, bar(c, "Agregar dispositivos", more=False) + body)
+
+
+def schedule(c):
+    def toggle(on):
+        return ('<div style="width:40px;height:22px;border-radius:11px;background:%s;position:relative;flex:none">'
+                '<div style="position:absolute;top:2px;%s:2px;width:18px;height:18px;border-radius:50%%;background:#fff;'
+                'box-shadow:0 1px 2px rgba(0,0,0,.3)"></div></div>' % (c["accent"] if on else c["chip"], "right" if on else "left"))
+
+    def srow(t, what, on_action, extra, enabled=True):
+        return ('<div class="row" style="padding:12px 12px 12px 16px;min-height:76px"><div class="c">'
+                '<div style="font-size:26px;font-weight:500;opacity:%s">%s</div>'
+                '<div style="font-size:14px;color:%s;opacity:%s">%s</div>'
+                '<div style="font-size:12px;color:%s;padding-top:3px;line-height:1.35">%s</div></div>%s</div>'
+                % (1 if enabled else .45, t, c["accent"] if on_action else c["text2"], 1 if enabled else .6, what,
+                   c["text2"], extra, toggle(enabled)))
+
+    def group(name, items):
+        return ('<div class="sec">%s</div><div class="gc">%s</div>'
+                % (name, '<div class="dv"></div>'.join(srow(*i) for i in items)))
+
+    hint = ('<div class="t2" style="font-size:13px;padding:12px 14px;border-radius:14px">Los horarios los cumple este teléfono: '
+            'a la hora indicada se conecta al dispositivo por tu Wi-Fi. Debe estar encendido y en la red de casa.</div>')
+    body = ('<div class="body">%s%s%s%s</div>' % (
+        hint,
+        group("Luz de la sala", [
+            ("7:00 p. m.", "Encender · Todos los días · Techo", True, "Próxima: hoy 7:00 p. m.<br>Última: ayer 7:00 p. m. · cumplido"),
+            ("11:30 p. m.", "Apagar · Todos los días", False, "Próxima: hoy 11:30 p. m.<br>Última: ayer 11:30 p. m. · cumplido")]),
+        group("Cafetera", [
+            ("6:30 a. m.", "Encender · Lunes a viernes", True, "Próxima: lunes 6:30 a. m.<br>Última: hoy 6:30 a. m. · cumplido"),
+            ("8:00 a. m.", "Apagar · Lunes a viernes", False, "Próxima: lunes 8:00 a. m.")]),
+        group("Bomba del patio", [
+            ("6:00 a. m.", "Encender · Mar, Jue, Sáb", True, "Desactivado", False)])))
+    hdr = ('<div class="bar"><div class="ib">%s</div><div class="tt"><div>Programación</div></div>'
+           '<div class="rb" style="width:40px;height:40px;background:%s;margin-right:8px">%s</div></div>'
+           % (icon("back", 24, c["text"]), c["accent"], icon("add", 21, c["on"])))
+    return frame(c, hdr + body)
+
+
+def editor(c):
+    days = "".join('<span style="flex:1;height:40px;border-radius:21px;display:flex;align-items:center;justify-content:center;'
+                   'font-weight:500;background:%s;color:%s">%s</span>'
+                   % (c["accent"] if on else c["chip"], c["on"] if on else c["text2"], l)
+                   for l, on in zip("LMMJVSD", [1, 1, 1, 1, 1, 0, 0]))
+    pill = ('<span style="flex:1;height:42px;border-radius:21px;display:flex;align-items:center;justify-content:center;'
+            'font-weight:500;background:%s;color:%s">%s</span>')
+    lab = '<div class="t2" style="font-size:12px;padding:10px 0 4px 4px">%s</div>'
+    chk = ('<div style="display:flex;align-items:center;gap:12px;padding:7px 2px;font-size:16px">'
+           '<span style="width:18px;height:18px;border-radius:3px;background:%s;border:2px solid %s"></span>%s</div>')
+    dlg = ('<div style="position:absolute;left:20px;right:20px;top:110px;background:%s;border-radius:24px;padding:22px 22px 14px;'
+           'box-shadow:0 12px 40px rgba(0,0,0,.25)">'
+           '<div style="font-size:20px;padding-bottom:14px">Nuevo horario · Luz de la sala</div>'
+           '<div style="height:76px;border-radius:16px;background:%s;display:flex;align-items:center;justify-content:center;'
+           'font-size:44px;font-weight:500">11:30 p. m.</div>'
+           + lab % "Acción" + '<div style="display:flex;gap:10px">' + pill % (c["chip"], c["text2"], "Encender")
+           + pill % (c["accent"], c["on"], "Apagar") + '</div>'
+           + lab % "Días" + '<div style="display:flex;gap:5px">' + days + '</div>'
+           '<div style="display:flex;gap:18px;padding:12px 4px 2px;font-size:13px;font-weight:500;color:%s">'
+           '<span>Todos</span><span>Lun–Vie</span><span>Sáb–Dom</span></div>'
+           + lab % "Teclas" + chk % (c["accent"], c["accent"], "Techo") + chk % (c["accent"], c["accent"], "Lámpara")
+           + chk % ("transparent", c["text2"], "Ventilador") +
+           '<div style="display:flex;justify-content:flex-end;gap:28px;padding:18px 6px 6px;color:%s;font-weight:500;font-size:14px">'
+           '<span>CANCELAR</span><span>GUARDAR</span></div></div>') % (c["card"], c["chip"], c["accent"], c["accent"])
+    shade = '<div style="position:absolute;inset:0;background:rgba(0,0,0,.42)"></div>'
+    return schedule(c).replace('<div class="gest"', shade + dlg + '<div class="gest"', 1)
 
 
 def page(c, inner, extra=""):
@@ -230,7 +297,7 @@ body{width:1280px;height:640px;background:linear-gradient(120deg,#FF5A1F 0%,#FF8
         sel, decl = rule.split("{", 1)
         scoped += ",".join(".dk " + s.strip() for s in sel.split(",") if s.strip()) + "{" + decl + "}"
     inner = ('<div class="txt"><h1>Hogar Local</h1><p>Tus interruptores y contactos Tuya, controlados por tu propia red.</p>'
-             '<div class="tags"><span>Sin cuenta</span><span>Sin nube</span><span>Sin rastreo</span><span>75 KB</span></div></div>'
+             '<div class="tags"><span>Sin cuenta</span><span>Sin nube</span><span>Sin rastreo</span><span>Horarios</span><span>90 KB</span></div></div>'
              '<div class="ph" style="left:650px;top:70px;transform:scale(.78)">%s</div>'
              '<div class="ph dk" style="left:960px;top:150px;transform:scale(.78);color:%s">%s</div>'
              % (home(LIGHT), DARK["text"], detail_plug(DARK)))
@@ -256,7 +323,8 @@ def main():
         phone = b.new_context(device_scale_factor=2).new_page()
         shots = [("01-inicio", page(LIGHT, home(LIGHT))), ("02-contacto", page(LIGHT, detail_plug(LIGHT))),
                  ("03-interruptor", page(LIGHT, detail_switch(LIGHT))), ("04-agregar", page(LIGHT, add(LIGHT))),
-                 ("05-oscuro", page(DARK, home(DARK)))]
+                 ("05-oscuro", page(DARK, home(DARK))), ("06-programacion", page(LIGHT, schedule(LIGHT))),
+                 ("07-horario", page(LIGHT, editor(LIGHT)))]
         for name, html in shots:
             shoot(phone, html, OUT / (name + ".png"), 360, 800, 2)
         wide = b.new_context(device_scale_factor=1).new_page()

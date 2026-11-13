@@ -6,6 +6,7 @@ import java.util.Map;
 
 import app.hogarlocal.proto.Json;
 import app.hogarlocal.proto.TuyaSession;
+import app.hogarlocal.sched.Schedule;
 
 /**
  * Lee listas de dispositivos con sus claves: el devices.json de tinytuya,
@@ -18,6 +19,7 @@ public final class Importer {
         public final List<Device> devices = new ArrayList<>();
         public final List<String> rooms = new ArrayList<>();
         public String homeName;
+        public final List<Schedule> schedules = new ArrayList<>();
     }
 
     @SuppressWarnings("unchecked")
@@ -34,6 +36,14 @@ public final class Importer {
                 r.homeName = Json.str(m, "home", null);
                 List<Object> rooms = Json.arr(m, "rooms");
                 if (rooms != null) for (Object o : rooms) if (o instanceof String) r.rooms.add((String) o);
+                List<Object> sc = Json.arr(m, "schedules");
+                if (sc != null) {
+                    for (Object o : sc) {
+                        if (!(o instanceof Map)) continue;
+                        Schedule x = Schedule.fromJson((Map<String, Object>) o);
+                        if (x != null) r.schedules.add(x);
+                    }
+                }
             }
             if (list == null) {
                 Map<String, Object> res = Json.obj(m, "result");
@@ -150,6 +160,9 @@ public final class Importer {
                 }
             }
             if (ch) updated++;
+        }
+        for (Schedule x : r.schedules) {
+            if (store.find(x.deviceId) != null && store.schedule(x.id) == null) store.schedules.add(x);
         }
         return new int[]{added, updated};
     }

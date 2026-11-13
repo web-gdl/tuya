@@ -2,6 +2,7 @@ package app.hogarlocal.ui;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -17,6 +18,7 @@ import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +30,8 @@ import app.hogarlocal.R;
 import app.hogarlocal.model.Device;
 import app.hogarlocal.model.Dp;
 import app.hogarlocal.model.DpLogic;
+import app.hogarlocal.sched.Planner;
+import app.hogarlocal.sched.Schedule;
 
 /** Detalle de un dispositivo: encendido, temporizador, consumo y datos de conexión. */
 public final class DeviceActivity extends Activity implements Home.Observer {
@@ -44,7 +48,7 @@ public final class DeviceActivity extends Activity implements Home.Observer {
     private final List<ImageView> powers = new ArrayList<>();
     private final List<TextView> labels = new ArrayList<>();
     private final List<TextView> timers = new ArrayList<>();
-    private TextView heroState, watts, volts, amps, roomValue, linkValue;
+    private TextView heroState, watts, volts, amps, roomValue, linkValue, scheduleValue;
 
     private final Runnable metricsTick = new Runnable() {
         @Override public void run() {
@@ -190,6 +194,14 @@ public final class DeviceActivity extends Activity implements Home.Observer {
 
         body.addView(Ui.space(this, 1, 16));
         LinearLayout info = Ui.card(this);
+        scheduleValue = null;
+        if (!sw.isEmpty()) {
+            LinearLayout schedRow = Ui.listRow(this, "Programación", " ", true);
+            scheduleValue = (TextView) ((LinearLayout) schedRow.getChildAt(0)).getChildAt(1);
+            Ui.clickable(schedRow, v -> startActivity(new Intent(this, ScheduleActivity.class).putExtra("id", device.id)));
+            info.addView(schedRow);
+            info.addView(Ui.divider(this));
+        }
         LinearLayout roomRow = Ui.listRow(this, "Cuarto", " ", true);
         roomValue = (TextView) ((LinearLayout) roomRow.getChildAt(0)).getChildAt(1);
         Ui.clickable(roomRow, v -> Actions.pickRoom(this, home, device));
@@ -326,6 +338,7 @@ public final class DeviceActivity extends Activity implements Home.Observer {
             volts.setText(v == null ? "—" : String.format(Locale.US, "%.1f V", v));
             amps.setText(a == null ? "—" : a >= 1000 ? String.format(Locale.US, "%.2f A", a / 1000) : String.format(Locale.US, "%.0f mA", a));
         }
+        if (scheduleValue != null) scheduleValue.setText(scheduleSummary());
         if (roomValue != null) roomValue.setText(device.room.isEmpty() ? "Sin cuarto" : device.room);
         if (linkValue != null) {
             String link;
@@ -338,6 +351,27 @@ public final class DeviceActivity extends Activity implements Home.Observer {
             }
             linkValue.setText(link);
         }
+    }
+
+    private String scheduleSummary() {
+        List<Schedule> mine = home.store.schedulesOf(device.id);
+        int active = 0;
+        for (Schedule s : mine) if (s.enabled) active++;
+        if (mine.isEmpty()) return "Encender o apagar a una hora fija";
+        if (active == 0) return mine.size() + (mine.size() == 1 ? " horario, desactivado" : " horarios, desactivados");
+        ZonedDateTime next = Planner.nextFor(home.store.schedules, device.id, ZonedDateTime.now());
+        String n = active + (active == 1 ? " activo" : " activos");
+        if (next == null) return n;
+        Schedule which = null;
+        for (Schedule s : mine) {
+            ZonedDateTime t = s.enabled ? Planner.next(s, ZonedDateTime.now()) : null;
+            if (t != null && t.equals(next)) which = s;
+        }
+        String day = next.toLocalDate().equals(java.time.LocalDate.now()) ? "hoy"
+                : next.toLocalDate().equals(java.time.LocalDate.now().plusDays(1)) ? "mañana"
+                : new String[]{"lun", "mar", "mié", "jue", "vie", "sáb", "dom"}[next.getDayOfWeek().getValue() - 1];
+        String hhmm = android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date.from(next.toInstant()));
+        return n + " · " + (which != null && !which.on ? "se apaga " : "se enciende ") + day + " " + hhmm;
     }
 
     // ---- acciones ----

@@ -29,6 +29,11 @@ import app.hogarlocal.proto.Discovery;
 import app.hogarlocal.proto.Json;
 import app.hogarlocal.proto.TuyaCodec;
 import app.hogarlocal.proto.TuyaSession;
+import app.hogarlocal.sched.Planner;
+import app.hogarlocal.sched.Runner;
+import app.hogarlocal.sched.Schedule;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 /** Pruebas en la JVM: sin Android y sin dispositivos reales. */
 public final class Tests {
@@ -138,6 +143,9 @@ public final class Tests {
         discovery();
         cloud();
         model();
+        planner();
+        scheduleStore();
+        runner();
 
         System.out.println(passed + " pruebas correctas, " + failed + " fallidas");
         System.exit(failed == 0 ? 0 : 1);
@@ -567,5 +575,176 @@ public final class Tests {
         check("IP local", Importer.isLocalIp("192.168.0.9") && Importer.isLocalIp("10.1.2.3") && Importer.isLocalIp("172.20.0.1"));
         check("IP no local", !Importer.isLocalIp("172.32.0.1") && !Importer.isLocalIp("1.2.3") && !Importer.isLocalIp("a.b.c.d") && !Importer.isLocalIp(null));
         file.delete();
+    }
+
+    static Schedule sched(String id, int h, int m, int days, boolean on) {
+        Schedule s = new Schedule();
+        s.id = id;
+        s.deviceId = "d1";
+        s.hour = h;
+        s.minute = m;
+        s.days = days;
+        s.on = on;
+        return s;
+    }
+
+    static void planner() {
+        System.out.println("Programación: cálculo de horarios");
+        ZoneId mx = ZoneId.of("America/Mexico_City");
+        // Miércoles 11-nov-2026, 18:30
+        ZonedDateTime wed = ZonedDateTime.of(2026, 11, 11, 18, 30, 0, 0, mx);
+        Schedule s = sched("a", 19, 0, Schedule.EVERY_DAY, true);
+        eq("hoy más tarde", Planner.next(s, wed), ZonedDateTime.of(2026, 11, 11, 19, 0, 0, 0, mx));
+        s.hour = 7;
+        eq("mañana temprano", Planner.next(s, wed), ZonedDateTime.of(2026, 11, 12, 7, 0, 0, 0, mx));
+        s.hour = 18; s.minute = 30;
+        eq("misma hora: la siguiente semana del ciclo", Planner.next(s, wed), ZonedDateTime.of(2026, 11, 12, 18, 30, 0, 0, mx));
+        Schedule wk = sched("b", 8, 0, Schedule.WEEKDAYS, true);
+        ZonedDateTime fri = ZonedDateTime.of(2026, 11, 13, 9, 0, 0, 0, mx);
+        eq("lunes a viernes salta el fin de semana", Planner.next(wk, fri), ZonedDateTime.of(2026, 11, 16, 8, 0, 0, 0, mx));
+        Schedule sun = sched("c", 22, 15, 1 << 6, false);
+        eq("solo domingo", Planner.next(sun, wed), ZonedDateTime.of(2026, 11, 15, 22, 15, 0, 0, mx));
+        eq("mismo día una semana después", Planner.next(sun, ZonedDateTime.of(2026, 11, 15, 22, 15, 0, 0, mx)),
+                ZonedDateTime.of(2026, 11, 22, 22, 15, 0, 0, mx));
+        Schedule none = sched("d", 1, 0, 0, true);
+        check("sin días", Planner.next(none, wed) == null);
+
+        // Cambio de horario en Madrid: 29-mar-2026, las 2:30 no existen.
+        ZoneId md = ZoneId.of("Europe/Madrid");
+        Schedule gap = sched("e", 2, 30, Schedule.EVERY_DAY, true);
+        ZonedDateTime g = Planner.next(gap, ZonedDateTime.of(2026, 3, 29, 0, 0, 0, 0, md));
+        eq("hora inexistente se corre", g.toLocalTime().toString(), "03:30");
+        eq("día correcto", g.getDayOfMonth(), 29);
+
+        List<Schedule> all = new ArrayList<>(Arrays.asList(
+                sched("1", 19, 0, Schedule.EVERY_DAY, true), sched("2", 7, 0, Schedule.WEEKDAYS, false),
+                sched("3", 19, 0, Schedule.WEEKDAYS, false)));
+        eq("próxima alarma", Planner.nextAlarm(all, wed), ZonedDateTime.of(2026, 11, 11, 19, 0, 0, 0, mx));
+        all.get(0).enabled = false;
+        all.get(2).enabled = false;
+        eq("ignora desactivadas", Planner.nextAlarm(all, wed), ZonedDateTime.of(2026, 11, 12, 7, 0, 0, 0, mx));
+        all.get(0).enabled = true;
+        all.get(2).enabled = true;
+        List<Schedule> d = Planner.due(all, ZonedDateTime.of(2026, 11, 11, 19, 0, 0, 0, mx));
+        eq("dos tocan a la vez", d.size(), 2);
+        eq("ninguna a deshoras", Planner.due(all, ZonedDateTime.of(2026, 11, 11, 19, 1, 0, 0, mx)).size(), 0);
+        eq("el sábado solo la diaria", Planner.due(all, ZonedDateTime.of(2026, 11, 14, 19, 0, 0, 0, mx)).size(), 1);
+        all.forEach(x -> x.enabled = false);
+        check("sin activas no hay alarma", Planner.nextAlarm(all, wed) == null);
+        eq("días: todos", Schedule.daysText(Schedule.EVERY_DAY), "Todos los días");
+        eq("días: laborables", Schedule.daysText(Schedule.WEEKDAYS), "Lunes a viernes");
+        eq("días: sueltos", Schedule.daysText(0b0010101), "Lun, Mié, Vie");
+    }
+
+    static void scheduleStore() throws Exception {
+        System.out.println("Programación: guardado y respaldo");
+        Schedule s = sched("x1", 6, 5, Schedule.WEEKEND, false);
+        s.dps.add("2");
+        s.lastRun = 123;
+        s.lastResult = "ok";
+        Schedule back = Schedule.fromJson(Json.parseObject(Json.write(s.toJson())));
+        eq("hora", back.hour * 100 + back.minute, 605);
+        eq("días", back.days, Schedule.WEEKEND);
+        check("apagar", !back.on);
+        eq("teclas", back.dps, Arrays.asList("2"));
+        eq("resultado", back.lastResult, "ok");
+        check("hora inválida", Schedule.fromJson(Json.parseObject("{\"id\":\"a\",\"device\":\"d\",\"time\":\"25:00\"}")) == null);
+        check("sin días", Schedule.fromJson(Json.parseObject("{\"id\":\"a\",\"device\":\"d\",\"time\":\"07:00\",\"days\":0}")) == null);
+
+        File file = File.createTempFile("prog", ".json");
+        file.delete();
+        Store st = new Store(file);
+        Device d = new Device();
+        d.id = "d1";
+        d.name = "Sala";
+        st.devices.add(d);
+        st.schedules.add(s);
+        Schedule orphan = sched("x2", 1, 0, 1, true);
+        orphan.deviceId = "no-existe";
+        st.schedules.add(orphan);
+        st.save();
+        st.flush();
+        Store again = new Store(file);
+        again.load();
+        eq("persiste y descarta huérfanas", again.schedules.size(), 1);
+        eq("de su dispositivo", again.schedulesOf("d1").size(), 1);
+
+        Importer.Result r = Importer.parse(Json.write(again.toJson(true)));
+        eq("viene en el respaldo", r.schedules.size(), 1);
+        Store fresh = new Store(new File(file.getPath() + "2"));
+        Importer.merge(fresh, r);
+        eq("se restaura", fresh.schedules.size(), 1);
+        Importer.merge(fresh, r);
+        eq("sin duplicar", fresh.schedules.size(), 1);
+        file.delete();
+    }
+
+    static void runner() throws Exception {
+        System.out.println("Programación: ejecución de una sola conexión");
+        for (String v : new String[]{"3.3", "3.4", "3.5"}) {
+            FakeDevice f = fake(v);
+            Runner.Target t = new Runner.Target(f.id, "127.0.0.1", f.port(), KEY, v);
+            Runner.Command c = new Runner.Command(null, Runner.setAll(Arrays.asList("1", "2"), true));
+            t.commands.add(c);
+            long t0 = System.currentTimeMillis();
+            Runner.run(Collections.singletonList(t), 10000);
+            eq(v + " cumplido", c.result, Runner.OK);
+            eq(v + " teclas 1", f.dps.get("1"), true);
+            eq(v + " teclas 2", f.dps.get("2"), true);
+            check(v + " rápido", System.currentTimeMillis() - t0 < 4000);
+            eq(v + " versión", t.workingVersion, v);
+            check(v + " cierra la conexión", waitFor(() -> f.connections == 1, 500));
+            f.close();
+        }
+        // Hub con dos subdispositivos en la misma conexión
+        FakeDevice hub = new FakeDevice(ID, KEY, "3.4", 0);
+        hub.children.put("a1", new LinkedHashMap<>(one("1", true)));
+        hub.children.put("b2", new LinkedHashMap<>(one("1", true)));
+        Runner.Target t = new Runner.Target(hub.id, "127.0.0.1", hub.port(), KEY, "3.4");
+        Runner.Command ca = new Runner.Command("a1", Runner.setAll(Arrays.asList("1"), false));
+        Runner.Command cb = new Runner.Command("b2", Runner.setAll(Arrays.asList("1"), false));
+        t.commands.add(ca);
+        t.commands.add(cb);
+        Runner.run(Collections.singletonList(t), 10000);
+        eq("hub: primero", ca.result, Runner.OK);
+        eq("hub: segundo", cb.result, Runner.OK);
+        eq("hub: aplicado", hub.children.get("b2").get("1"), false);
+        eq("hub: una conexión", hub.connections, 1);
+        hub.close();
+
+        // Ya en el estado pedido: también cuenta como cumplido
+        FakeDevice same = fake("3.3");
+        Runner.Target ts = new Runner.Target(same.id, "127.0.0.1", same.port(), KEY, "3.3");
+        Runner.Command cs = new Runner.Command(null, Runner.setAll(Arrays.asList("2"), true));
+        ts.commands.add(cs);
+        Runner.run(Collections.singletonList(ts), 8000);
+        eq("ya encendido", cs.result, Runner.OK);
+        same.close();
+
+        // Clave incorrecta, equipo apagado y dos destinos en paralelo
+        FakeDevice wrong = fake("3.4");
+        FakeDevice good = fake("3.3");
+        FakeDevice gone = fake("3.3");
+        int gonePort = gone.port();
+        gone.close();
+        Runner.Target tw = new Runner.Target(wrong.id, "127.0.0.1", wrong.port(), "fedcba9876543210", "3.4");
+        Runner.Command cw = new Runner.Command(null, one("1", true));
+        tw.commands.add(cw);
+        Runner.Target tg = new Runner.Target(good.id, "127.0.0.1", good.port(), KEY, "3.3");
+        Runner.Command cg = new Runner.Command(null, one("1", true));
+        tg.commands.add(cg);
+        Runner.Target tx = new Runner.Target(ID, "127.0.0.1", gonePort, KEY, "3.3");
+        Runner.Command cx = new Runner.Command(null, one("1", true));
+        tx.commands.add(cx);
+        long t0 = System.currentTimeMillis();
+        Runner.run(Arrays.asList(tw, tg, tx), 6000);
+        long took = System.currentTimeMillis() - t0;
+        eq("el bueno se cumple", cg.result, Runner.OK);
+        check("clave incorrecta no se da por buena", !cw.result.equals(Runner.OK) && !cw.result.equals(Runner.UNCONFIRMED));
+        eq("clave incorrecta no cambia nada", wrong.dps.get("1"), false);
+        eq("apagado", cx.result, TuyaSession.ERR_UNREACHABLE);
+        check("respeta el plazo", took < 8000);
+        wrong.close();
+        good.close();
     }
 }

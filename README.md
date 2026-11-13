@@ -3,10 +3,10 @@
 # Hogar Local
 
 **Controla tus interruptores de pared y contactos inteligentes Tuya / Smart Life directamente por el Wi-Fi de tu casa.**
-Sin cuenta, sin nube, sin rastreo, sin anuncios. Una app Android nativa de 75 KB.
+Sin cuenta, sin nube, sin rastreo, sin anuncios. Una app Android nativa de 90 KB.
 
 <p align="center">
-  <a href="https://github.com/web-gdl/tuya/raw/main/descargas/HogarLocal.apk"><b>⬇️ Descargar APK (v0.1.0, 75 KB)</b></a>
+  <a href="https://github.com/web-gdl/tuya/raw/main/descargas/HogarLocal.apk"><b>⬇️ Descargar APK (v0.2.0, 90 KB)</b></a>
   ·
   <a href="descargas/SHA256SUMS.txt">SHA-256</a>
   ·
@@ -21,11 +21,15 @@ Sin cuenta, sin nube, sin rastreo, sin anuncios. Una app Android nativa de 75 KB
 ## Galería
 
 <p align="center">
-  <img src="docs/screenshots/01-inicio.png" width="19%" alt="Inicio">
-  <img src="docs/screenshots/02-contacto.png" width="19%" alt="Contacto con medidor">
-  <img src="docs/screenshots/03-interruptor.png" width="19%" alt="Interruptor de tres teclas">
-  <img src="docs/screenshots/04-agregar.png" width="19%" alt="Agregar dispositivos">
-  <img src="docs/screenshots/05-oscuro.png" width="19%" alt="Tema oscuro">
+  <img src="docs/screenshots/01-inicio.png" width="24%" alt="Inicio">
+  <img src="docs/screenshots/02-contacto.png" width="24%" alt="Contacto con medidor">
+  <img src="docs/screenshots/03-interruptor.png" width="24%" alt="Interruptor de tres teclas">
+  <img src="docs/screenshots/06-programacion.png" width="24%" alt="Programación semanal">
+</p>
+<p align="center">
+  <img src="docs/screenshots/07-horario.png" width="24%" alt="Nuevo horario">
+  <img src="docs/screenshots/04-agregar.png" width="24%" alt="Agregar dispositivos">
+  <img src="docs/screenshots/05-oscuro.png" width="24%" alt="Tema oscuro">
 </p>
 
 <sub>Las imágenes son ilustraciones generadas por <code>docs/preview/render.py</code> con las mismas medidas, colores e iconos que el código; no son capturas de un teléfono real.</sub>
@@ -42,6 +46,7 @@ Hogar Local habla ese protocolo local directamente. Tu teléfono y tu interrupto
 |---|---|
 | 🏠 **Inicio al estilo Smart Life** | Hogar, pestañas por cuarto y tarjetas con encendido rápido. Los interruptores de 2 a 6 teclas muestran un botón por tecla. |
 | 💡 **Detalle del dispositivo** | Encendido, «encender / apagar todo», nombre por tecla y temporizador del propio dispositivo. |
+| 📅 **Programación semanal** | Encender o apagar a una hora fija los días que elijas, por tecla. La cumple el teléfono, sin nube. [Guía](docs/PROGRAMACION.md) |
 | ⚡ **Consumo** | Potencia (W), voltaje (V) y corriente en los contactos con medidor, actualizado cada 5 s. |
 | 🔄 **Estado en vivo** | Si alguien pulsa el botón físico, la app lo ve al instante. |
 | 🔍 **Detección automática** | Encuentra la IP y la versión del protocolo de cada dispositivo escuchando sus anuncios en la red. |
@@ -56,10 +61,12 @@ Protocolo local Tuya **3.1, 3.3, 3.4 y 3.5** (los que usan prácticamente todos 
 - **Sin cuenta.** No hay registro ni inicio de sesión.
 - **Sin nube para controlar.** Todas las órdenes van por tu red local (TCP 6668).
 - **Sin telemetría, anuncios ni SDK de terceros.** Ni Firebase, ni Google, ni Tuya. Lo comprueba `audit.sh`.
-- **Nada en segundo plano.** Sin servicios ni receptores: las conexiones se abren al ver la app y se cierran al salir.
-- **Solo 2 permisos:**
+- **Nada corriendo en segundo plano.** Sin servicios: las conexiones se abren al ver la app y se cierran al salir. La única excepción son tus horarios: si programas alguno, Android despierta la app unos segundos a esa hora para mandar la orden, y nada más.
+- **Permisos:**
   - `INTERNET` — Android lo exige para cualquier conexión, incluso dentro de tu casa.
   - `CHANGE_WIFI_MULTICAST_STATE` — para escuchar los anuncios de los dispositivos en el Wi-Fi.
+  - `USE_EXACT_ALARM` / `SCHEDULE_EXACT_ALARM` — para que los horarios se cumplan a la hora exacta.
+  - `RECEIVE_BOOT_COMPLETED` — para reponer la alarma de los horarios al reiniciar el teléfono.
 - El único acceso a internet es **opcional y lo inicias tú**: «Descargar de Tuya IoT», para obtener las claves una sola vez. Las credenciales no se guardan.
 
 ## Instalación
@@ -99,16 +106,17 @@ El `devices.json` que genera [tinytuya](https://github.com/jasonacox/tinytuya) (
 
 - **Solo en tu red.** No hay control fuera de casa (eso requeriría la nube).
 - **No empareja dispositivos nuevos.** Eso se hace una vez con Smart Life; después puedes desinstalarla o dejarla.
-- **Sin escenas ni horarios propios.** El temporizador es el que trae el dispositivo.
+- **Los horarios los cumple el teléfono.** Debe estar encendido y en el Wi-Fi de casa a esa hora, y sin ahorro de batería agresivo para la app ([detalles](docs/PROGRAMACION.md#requisitos-para-que-se-cumplan)).
+- **Sin escenas** («tocar para ejecutar») todavía.
 - **Conexiones simultáneas.** Muchos dispositivos aceptan pocas conexiones locales a la vez: si Smart Life está abierta al mismo tiempo, uno de los dos puede quedar sin conexión.
 - **Zigbee por hub** está implementado pero sin probar en hardware.
 
 ## Estado del proyecto
 
-Versión **0.1.0** — primera publicación.
+Versión **0.2.0** — programación semanal de encendido y apagado.
 
-- ✅ Compila, firma v2+v3 verificada.
-- ✅ 215 pruebas automáticas contra un dispositivo simulado (las cuatro versiones del protocolo, hub, clave incorrecta, reconexión, nube simulada, importación).
+- ✅ Compila, firma v2+v3 verificada (misma clave que la 0.1.0: se actualiza sin desinstalar).
+- ✅ 273 pruebas automáticas contra un dispositivo simulado (las cuatro versiones del protocolo, hub, clave incorrecta, reconexión, nube simulada, importación, cálculo de horarios con cambio de horario, ejecución programada).
 - ✅ Tramas comprobadas contra vectores generados aparte en Python.
 - ⏳ **Pendiente de probar en teléfonos y dispositivos reales.** Si la pruebas, abre un *issue* con el modelo de tu dispositivo y lo que ves.
 
@@ -139,15 +147,18 @@ src/app/hogarlocal/
 ├── proto/   Protocolo: tramas 55AA/6699, sesión con reconexión, descubrimiento UDP,
 │            cliente de Tuya IoT y JSON mínimo (sin dependencias, corre también en la JVM)
 ├── model/   Dispositivos, significado de cada DP, almacenamiento e importación
+├── sched/   Horarios semanales: cálculo de la siguiente ejecución y conexión de un solo uso
 ├── ui/      Inicio, detalle y alta de dispositivos, construidos en código
-└── Home.java   Conexiones vivas mientras la app está en pantalla
+├── Home.java              Conexiones vivas mientras la app está en pantalla
+├── Scheduler.java         Alarma del próximo horario
+└── ScheduleReceiver.java  Cumple los horarios a su hora (único componente en segundo plano)
 res/         Colores (claro/oscuro), estilos e iconos vectoriales
 test/        Dispositivo simulado, vectores de referencia en Python y pruebas
 docs/        Guías e imágenes (render.py las regenera)
 descargas/   El APK firmado y su suma SHA-256
 ```
 
-Detalle del protocolo: [docs/PROTOCOLO.md](docs/PROTOCOLO.md).
+Detalle del protocolo: [docs/PROTOCOLO.md](docs/PROTOCOLO.md). Programación: [docs/PROGRAMACION.md](docs/PROGRAMACION.md).
 
 ## Agradecimientos
 

@@ -4,14 +4,22 @@ set -e
 cd "$(dirname "$0")"
 APK=out/HogarLocal.apk
 fail=0
-perms=$(tools/aapt2 dump permissions $APK | grep "uses-permission" | sed "s/.*name='\(.*\)'/\1/" | sort | tr '\n' ' ')
+perms=$(tools/aapt2 dump permissions $APK | grep "uses-permission" | sed "s/.*name='\([^']*\)'.*/\1/" | sort | tr '\n' ' ')
 echo "Permisos: $perms"
-[ "$perms" = "android.permission.CHANGE_WIFI_MULTICAST_STATE android.permission.INTERNET " ] || { echo "FALLA: permisos inesperados"; fail=1; }
+expected="android.permission.CHANGE_WIFI_MULTICAST_STATE android.permission.INTERNET android.permission.RECEIVE_BOOT_COMPLETED android.permission.SCHEDULE_EXACT_ALARM android.permission.USE_EXACT_ALARM "
+[ "$perms" = "$expected" ] || { echo "FALLA: permisos inesperados"; fail=1; }
 tools/aapt2 dump xmltree $APK --file AndroidManifest.xml > build/manifest.txt
-for tag in service receiver provider; do
+for tag in service provider; do
     if grep -q "E: $tag " build/manifest.txt; then echo "FALLA: hay <$tag>"; fail=1; fi
 done
-echo "Sin servicios, receptores ni proveedores: nada corre en segundo plano."
+receivers=$(grep -c "E: receiver " build/manifest.txt || true)
+if [ "$receivers" != 1 ] || ! grep -A3 "E: receiver " build/manifest.txt | grep -q 'ScheduleReceiver'; then
+    echo "FALLA: se esperaba solo el receptor de la programación"; fail=1
+fi
+if grep -A4 "E: receiver " build/manifest.txt | grep -q "exported.*=true"; then
+    echo "FALLA: el receptor no debe estar exportado"; fail=1
+fi
+echo "Sin servicios ni proveedores; un único receptor (programación), no exportado."
 rm -rf build/audit && mkdir -p build/audit && unzip -q -o $APK -d build/audit
 echo "Archivos: $(unzip -Z1 $APK | wc -l); bibliotecas nativas: $(unzip -Z1 $APK | grep -c '\.so$' || true)"
 hosts=$(strings -n 6 build/audit/classes.dex | grep -oE 'https?://[A-Za-z0-9./_-]+' | sort -u | tr '\n' ' ')

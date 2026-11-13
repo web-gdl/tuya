@@ -29,6 +29,7 @@ import java.util.Map;
 
 import app.hogarlocal.Home;
 import app.hogarlocal.R;
+import app.hogarlocal.Scheduler;
 import app.hogarlocal.model.Device;
 import app.hogarlocal.model.Dp;
 import app.hogarlocal.model.DpLogic;
@@ -77,6 +78,8 @@ public final class MainActivity extends Activity implements Home.Observer {
         super.onStart();
         home.addObserver(this);
         home.acquire();
+        // Repone la alarma por si el sistema la quitó (por ejemplo, al forzar la detención de la app).
+        Scheduler.update(this);
         refresh();
     }
 
@@ -260,6 +263,10 @@ public final class MainActivity extends Activity implements Home.Observer {
         c1.addView(Ui.divider(this));
         int n = home.store.rooms.size();
         addRow(c1, "Cuartos", n == 0 ? "Ninguno" : n + (n == 1 ? " cuarto" : " cuartos"), v -> Actions.manageRooms(this, home));
+        c1.addView(Ui.divider(this));
+        int sc = home.store.schedules.size();
+        addRow(c1, "Programación", sc == 0 ? "Encendido y apagado semanal" : sc + (sc == 1 ? " horario" : " horarios"),
+                v -> startActivity(new Intent(this, ScheduleActivity.class)));
         b.addView(c1);
 
         b.addView(Ui.space(this, 1, 16));

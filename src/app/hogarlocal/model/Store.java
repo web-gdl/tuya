@@ -13,12 +13,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import app.hogarlocal.proto.Json;
+import app.hogarlocal.sched.Schedule;
 
 /** Hogar, cuartos y dispositivos guardados en un único JSON privado de la app. */
 public final class Store {
     public String homeName = "Mi hogar";
     public final List<String> rooms = new ArrayList<>();
     public final List<Device> devices = new ArrayList<>();
+    public final List<Schedule> schedules = new ArrayList<>();
 
     private final File file;
     private final ExecutorService io = Executors.newSingleThreadExecutor(r -> {
@@ -32,6 +34,17 @@ public final class Store {
     public Device find(String id) {
         for (Device d : devices) if (d.id.equals(id)) return d;
         return null;
+    }
+
+    public Schedule schedule(String id) {
+        for (Schedule s : schedules) if (s.id.equals(id)) return s;
+        return null;
+    }
+
+    public List<Schedule> schedulesOf(String deviceId) {
+        List<Schedule> out = new ArrayList<>();
+        for (Schedule s : schedules) if (s.deviceId.equals(deviceId)) out.add(s);
+        return out;
     }
 
     public List<Device> childrenOf(String id) {
@@ -49,6 +62,9 @@ public final class Store {
         List<Object> l = new ArrayList<>();
         for (Device d : devices) l.add(d.toJson(withKeys));
         m.put("devices", l);
+        List<Object> sc = new ArrayList<>();
+        for (Schedule x : schedules) sc.add(x.toJson());
+        m.put("schedules", sc);
         return m;
     }
 
@@ -57,6 +73,7 @@ public final class Store {
         homeName = Json.str(m, "home", "Mi hogar");
         rooms.clear();
         devices.clear();
+        schedules.clear();
         List<Object> r = Json.arr(m, "rooms");
         if (r != null) for (Object o : r) if (o instanceof String && !rooms.contains(o)) rooms.add((String) o);
         List<Object> l = Json.arr(m, "devices");
@@ -65,6 +82,14 @@ public final class Store {
                 if (!(o instanceof Map)) continue;
                 Device d = Device.fromJson((Map<String, Object>) o);
                 if (!d.id.isEmpty() && find(d.id) == null) devices.add(d);
+            }
+        }
+        List<Object> sc = Json.arr(m, "schedules");
+        if (sc != null) {
+            for (Object o : sc) {
+                if (!(o instanceof Map)) continue;
+                Schedule x = Schedule.fromJson((Map<String, Object>) o);
+                if (x != null && find(x.deviceId) != null && schedule(x.id) == null) schedules.add(x);
             }
         }
     }

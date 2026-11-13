@@ -110,6 +110,12 @@ public final class Home implements TuyaSession.Listener, Discovery.Listener {
         if (users == 0) main.postDelayed(closer, CLOSE_DELAY_MS);
     }
 
+    /** Si la app tiene ya una conexión viva con ese equipo (o su hub), para no abrir otra. */
+    public boolean isLive(Device d) {
+        TuyaSession s = active ? sessions.get(d.isSub() ? d.parent : d.id) : null;
+        return s != null && s.state() == TuyaSession.ONLINE;
+    }
+
     public boolean discoveryBlocked() {
         return discovery != null && active && discovery.boundPorts() == 0;
     }
@@ -195,8 +201,10 @@ public final class Home implements TuyaSession.Listener, Discovery.Listener {
 
     public void remove(Device d) {
         store.devices.remove(d);
+        store.schedules.removeIf(x -> x.deviceId.equals(d.id));
         for (Device c : store.childrenOf(d.id)) c.parent = "";
         store.save();
+        Scheduler.update(app);
         sync();
     }
 
